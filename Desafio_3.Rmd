@@ -1,0 +1,331 @@
+---
+title: "Desafio III"
+subtitle: "Estatística Espacial I"
+author: "Igor Freitas e João Pedro Fernandes"
+date: "Janeiro/2022"
+output: 
+  rmdformats::readthedown:
+    use_bookdown: true  
+    fig_caption: true
+  html_document: 
+    fig_height: 10
+    fig_width: 12.5
+editor_options: 
+  chunk_output_type: console
+css: custom.css
+---
+
+```{r echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      include = FALSE)
+
+htmltools::img(src = knitr::image_uri("logoUffAzulTransparente.png"), 
+               alt = 'logo', 
+               style = 'position:absolute; top:10px; right:0; padding:5px;width: 150px; height: 80px')
+
+library(pacman)
+p_load(char = c("kableExtra", 
+                "foreign",
+                "tidyverse",
+                "readxl",
+                "lubridate",
+                "sf",
+                "tmap",
+                "ggplot2")) 
+
+#setwd("C:/Users/rafae/Dropbox/UFF/LES/ASSESSORIAS/2021/Mariana Seglia - Fiocruz/Atendimento LES - Mariana/Shape")
+```
+
+<div style="text-align: justify">
+
+# Objetivo
+
+O estudo se baseia no conjunto de dados referentes a segurados de uma empresa e residentes no município do Rio de Janeiro.
+
+As informações contêm a localização geográfica das residências dos segurados e seus devidos prêmios do seguro.
+
+Os pesquisadores Igor Freitas e João Pedro Fernandes, recém-contratados por uma empresa de seguro de automóveis, estão encarregados de precificar o valor pago pelos segurados, analisando a dependência espacial na região estudada.
+
+
+# Análises exploratórias {.tabset .tabset-fade .tabset-pills}
+
+## Parte I 
+
+Os dados totalizam 211 observações de 3 variáveis, referentes à latitude e à longitude das residências dos segurados e ao prêmio do seguro para pessoas que residem no município do Rio de Janeiro.
+
+Como é possível observar no mapa abaixo, grande parte dos pontos se localizam à direita do mapa, o que ocasiona vazios em relação às observações principalmente na Zona Oeste da cidade.
+
+```{r results='hide'}
+library(raster)
+library(tidyverse)
+library(geoR)
+library(readxl)
+library(rgdal)
+
+# Lendo a base de dados
+base <- read_excel("seguro_auto.xlsx")
+
+# Lendo o SHAPE
+mapaRJ <- readOGR("Limite_Bairro_si.shp",layer="Limite_Bairro_si")
+```
+
+```{r fig.height = 5, include = TRUE}
+
+# Mapa com pontos
+par(mar=c(4,4,0,0),cex=1.4)
+plot(mapaRJ,xlab="longitude",ylab="latitude")
+points(base$long,base$lat,col=2,pch=21,bg=5)
+axis(1)
+axis(2)
+
+```
+<center><font size="2">
+**Figura 1 - Mapa do município do Rio de Janeiro com as observações referentes às residências dos segurados**
+</center></font>
+
+## Parte II
+
+Analisando histogramas, chega-se à conclusão que os valores do prêmio têm comportamento assimétrico, com maior variabilidade, já que há pontos cujos valores de seguro são muito altos (outliers). Já o log do prêmio apresenta comportamento se assemelhando à distribuição normal, diminuindo a variabiidade e estabilizando um pouco a incerteza. 
+Dessa forma, escolhe-se modelar o logaritmo do prêmio.
+
+
+```{r fig.height = 5, include = TRUE}
+# Histograma do premio
+par(mfrow=c(1,2),mar=c(4,4,0.5,0.5))
+hist(base$premio,main="",xlab="Prêmio",ylab="Frequência")
+hist(log(base$premio),main="",xlab="Log(prêmio)",ylab="Frequência")
+
+```
+<center><font size="2">
+**Figura 2 - Histogramas do prêmio e do logaritmo do prêmio dos segurados**
+</center></font>
+
+
+
+# Análise geoestatística {.tabset .tabset-fade .tabset-pills}
+
+## Parte I 
+
+Interpretando os gráficos gerados a seguir (Figura 3), percebe-se que a maioria das observações relativas às residências dos segurados se encontram na faixa nordeste do município (ao norte e ao leste) e que os valores do logaritmo do prêmio pago pelo segurado estão concentrados entre 7 e 8, em média, e aparentam apresentar distribuição normal.
+
+```{r results='hide'}
+base$log_premio <- log(base$premio)
+
+# Transformando em geodata (para usar as funcoes do pacote geoR)
+dados <- as.geodata(base, coords.col = 3:2, data.col = 4, covar.col=1)
+```
+
+```{r fig.height = 5, include = TRUE}
+
+plot(dados)
+```
+<center><font size="2">
+**Figura 3- Gráficos referentes às localizações geográficas das residências dos segurados e o logaritmo do prêmio**
+</center></font>
+
+Pela Figura 4, são tiradas algumas indicações a partir do gráfico. Os segurados na faixa à noroeste apresentam valores próximos de prêmios, assim como os residentes da Zona Sul, por exemplo. 
+
+É possível notar que os maiores valores de prêmios a serem pagos pelos segurados estão, principalmente, à direita e acima do gráfico (maior presença de bolhas brancas). 
+
+Também observa-se que praticamente todas as regiões apresentam observações com pequeno valor de prêmio (bolhas verdes ou amarelas) ao mesmo tempo que observações com valores de prêmio maiores (bolhas rosas ou brancas). 
+
+
+```{r results='hide'}
+par(mfrow=c(1,1))
+points(dados,cex.min=1, cex.max=5, pt.sizes="quintiles",
+       col=terrain.colors(5),xlab="longitude",ylab="latitude")
+
+```
+<!-- <center><font size="2"> -->
+<!-- **Figura 4 - Gráfico de quantis dos valores do logaritmo do prêmio pelo segurado** -->
+<!-- </center></font> -->
+
+<center>
+
+![**Figura 4 - Gráfico de quantis dos valores do logaritmo do prêmio pelo segurado**](bolhas.png)
+
+</center>
+
+## Parte II
+
+Analisando o semivariograma empírico e a tendência estimada por máxima verossimilhança (Figura 5), verifica-se que, após testar os modelos da família matern, esférica, exponencial e gaussiana, optou-se pela utilização do modelo gaussiano. 
+
+O alcance (distância até se chegar no patamar) encontrado foi bem pequeno, indicando uma subida rápida nos valores do semivariograma. Assim, já para pequenas distâncias, não há tanta dependência espacial.
+
+```{r results='hide'}
+# Variograma empirico
+v <- geoR::variog(dados,trend= ~ dados$coords)
+
+par(mfrow=c(1,1),mar=c(4,4,0.5,0.5),cex=1.5)
+plot(v,pch=16,col=4,xlab="distancia",ylab="semivariograma",ylim=c(0,0.5))
+
+# eyefit(v)
+
+# Estimando via MV
+# opcoes para trend: cte (media constante), 1st (tendencia linear) e 2st (tendencia quadratica).
+
+# trend.spatial(~coords + sinistro, dados)[1:5,]
+
+
+# Estimando o efeito pepita:
+mv <- likfit(dados, ini=c(0.1,0.1), trend = trend.spatial(~coords, dados), cov.model="gaussian", fix.nugget = TRUE, nugget=0.15)
+summary(mv)
+```
+
+```{r fig.height = 5, include = TRUE}
+par(mfrow=c(1,1))
+plot(v,col=4,xlab="distância",ylab="semivariograma",ylim=c(0,0.5))
+lines(mv,lty=1,col="blue")
+
+```
+<center><font size="2">
+**Figura 5 - Semivariograma empírico**
+</center></font>
+
+## Parte III
+
+De acordo com a Figura 6, é possível tirar algumas conclusões: 
+
+* existem regiões com prêmios muito altos, porém com locais na mesma região com valores de prêmios baixos;
+
+* confirmando o alcance pequeno observado anteriormente: próximo à região escura, em pequenas distâncias já não há dependências expressivas entre os dados;
+
+* a Zona Sul e a faixa mais à oeste do mapa aparentam apresentar os valores de prêmios mais baixos e as regiões com vias expressas, próximos de locais favelizados e na divisa de municípios, por exemplo, os mais altos.
+
+```{r results='hide'}
+
+### Interpolacao ponderada pelo inverso da distancia
+
+library(gstat)
+library(sp)
+
+base.idw <- as.data.frame(cbind(dados$coords,dados$data))
+coordinates(base.idw) <- c("long", "lat")
+
+summary(dados$coords)
+long = seq(-43.8,-43.1,l=50)
+lat = seq(-23.1,-22.79,l=50)
+nx = length(long)
+ny = length(lat)
+# criando o grid de pontos para interpolar
+grid = as.data.frame(expand.grid(long,lat))
+
+# coordenadas dos pontos do grid
+coordinates(grid) = ~Var1+Var2
+
+# interpolacao
+interpol <- idw(V3~1, base.idw, newdata = grid, idp = 2)
+interpol.matriz = matrix(interpol$var1.pred,nx,ny)
+```
+
+
+```{r fig.height = 5, include = TRUE}
+
+# grafico
+#opcao 1
+filled.contour(long, lat,interpol.matriz,
+               key.title = title(main = "log prêmio", cex.main = 1),
+               plot.axes={axis(1)
+                 axis(2)
+                 plot(mapaRJ,xlab="longitude",ylab="latitude",add=TRUE)
+               })
+```
+<center><font size="2">
+**Figura 6 - Mapa com a interpolação ponderada pelo inverso da distância**
+</center></font>
+
+## Parte IV
+
+Pelo histograma a seguir, usando uma janela de 2.500 pontos preditos, percebe-se que o y ajustado parece ter distribuição normal com valores em torno de 7 e 8 e média próxima a 7,5.
+
+```{r results='hide'}
+
+### Krigagem
+
+long.pred = seq(-43.8,-43.1,l=50)
+lat.pred = seq(-23.1,-22.79,l=50)
+grid.pred <- expand.grid(long.pred,lat.pred)
+
+
+# krigagem
+krigagem <- krige.conv(dados, loc=grid.pred,
+                       krige=krige.control(type.krige="SK",
+                                           trend.d = trend.spatial(~coords, dados),
+                                           trend.l = trend.spatial(~Var1+Var2, grid.pred),
+                                           beta=mv$beta,
+                                           nugget=mv$nugget,
+                                           cov.pars=c(0.1884,0.01)))
+```
+
+```{r fig.height = 5, include = TRUE}
+
+hist(krigagem$predict, ylab="Frequência", xlab="Predições por krigagem", main="")
+```
+<center><font size="2">
+**Figura 7- Histograma dos valores do logaritmo do prêmio preditos por krigagem simples**
+</center></font>
+
+Pela superfície apresentada na Figura 8, os menores valores a serem pagos pelos segurados são os de residentes em zonas nobres, como a Zona Sul. 
+
+Em comparação, os maiores prêmios estão concentrados em regiões que cruzam vias expressas, divisas de municípios, dentre outras áreas espalhadas pela cidade.
+
+```{r results='hide'}
+
+plot(mapaRJ,xlab="longitude",ylab="latitude",xaxt = "n", yaxt = "n", 
+     bty = "n",type="n")
+
+# media
+par(mfrow=c(1,1),mar=c(4,4,0.5,0.5))
+image(krigagem, loc=grid.pred, 
+      col=terrain.colors(256))
+plot(mapaRJ,xlab="longitude",ylab="latitude",add=TRUE)
+
+```
+
+<center>
+
+![**Figura 8- Superfície de predição média dos valores do prêmio a partir de krigagem simples**](mapa_media.png)
+
+</center>
+
+Na Figura 9, percebe-se que na Zona Oeste, principalmente, há poucas observações registradas, o que gera uma grande incerteza sobre as predições dos valores do prêmio nessa região.
+
+O que não ocorre na parte mais ao leste e ao norte do mapa, em que existe mais certeza encontrada, ou seja, muitos pontos ao redor e menor variância de predição.
+
+```{r results='hide'}
+
+# Mapa com pontos
+par(mar=c(4,4,0,0),cex=1.4)
+plot(mapaRJ,xlab="longitude",ylab="latitude")
+points(base$long,base$lat,col=2,pch=21,bg=5)
+axis(1)
+axis(2)
+
+# variancia
+par(mfrow=c(1,1),mar=c(4,4,0.5,0.5))
+image(krigagem, loc=grid.pred, 
+      values=krigagem$krige.var, col=terrain.colors(256))
+plot(mapaRJ,xlab="longitude",ylab="latitude",add=TRUE)
+```
+
+<center>
+
+![**Figura 9- Superfície de variância de predição dos valores do prêmio a partir de krigagem simples**](mapa_variancia.png)
+
+</center>
+
+# Conclusões {.tabset .tabset-fade .tabset-pills}
+
+Neste trabalho, após traçar um objetivo inicial, foram feitas análises exploratórias e geoestatísticas por meio de gráficos e mapas.
+
+Com isso, foi possibilitado plotar o semivariograma empírico e estimar a tendência por máxima verossimilhança após testar diferentes modelos. O alcance encontrado foi pequeno, o que indicou que para distâncias já não muito grandes, a dependência espacial não era expressiva. 
+
+Por fim, é possível concluir que, através dos métodos de interpolação ponderada pelo inverso da distância e krigagem simples:
+
+* as regiões com prêmios mais altos estão localizadas em áreas como as de vias expressas, divisa de municípios, principalmente mais ao norte e à direita do mapa da cidade;
+
+* já os menores valores a serem pagos pelos segurados são os de residentes em zonas nobres, como a Zona Sul;
+
+* a Zona Oeste apresenta poucas observações registradas, ocasionando uma certa incerteza sobre as predições dos valores do prêmio nessa região, ao contrário das zonas mais ao leste e ao norte do mapa, que possuem menor variabilidade em relação às suas observações.

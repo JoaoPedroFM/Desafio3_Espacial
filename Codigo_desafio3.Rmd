@@ -1,20 +1,20 @@
-### Desafio 3 - Estatística Espacial I
+---
+title: "Untitled"
+output: html_document
+---
 
-## Exemplo: Dados obtidos a partir do banco de dados Scottish Statistics
-## (http://statistics.gov.scot), mas também estão incluídos no pacote 
-## CARBayesdata no R. Dados da região de Greater Glasgow & Clyde. 
+```{r setup, include=FALSE}
+## Exemplo: Nascidos vivos no estado do RJ em 2010 (ano do último CENSO)- modelar a dependência espacial com base na taxa de analfabetismo, na taxa de desemprego e de trabalho infantil
 
 {library(CARBayesdata)
-  library(sp)
-  library(dplyr)
-  library(sf)
-  library(ggplot2)
-  library(spdep)
-  library(spatialreg)
-  library(rgdal)
-  library(leaflet)
-  library(tidyverse)
-  library(readxl)}
+library(sp)
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(spdep)
+library(spatialreg)
+library(rgdal)
+library(leaflet)}
 
 # Carregando os dados 
 RJ= st_read("RJ_Municipios_2020.shp")
@@ -28,70 +28,105 @@ base = nascimentos |>
   left_join(desemprego) |> 
   left_join(trab_infantil) 
 
+# price: preço mediano dos imóveis vendidos em 2008 (em milhares de libras)
+# crime: taxa de criminalidade por 10 mil habitantes
+# rooms: número médio de quartos em um imóvel
+# sales: número de imóveis vendidos em um ano
+# driveshop: tempo médio gasto dirigindo até o centro comercial mais próximo
+# type: tipo de propriedade de maior prevalencia em cada área - apartamento (flat),
+#       terraço (terraced), geminada (semi) e não geminada (detached).
+
+
 ## Analise dos dados
 
-# Histogram do nascimentos dos imoveis
+# Histogram do preço dos imoveis
 ggplot(base)+
-  geom_histogram(aes(x = nascimentos))
+  geom_histogram(aes(x = price))
 
-# Histogram do log do nascimentos dos imoveis
-base <- base |> mutate(lognascimentos = log(base$nascimentos))
+# Histogram do log do preço dos imoveis
+base <- base |> mutate(logprice = log(base$price))
 ggplot(base)+
-  geom_histogram(aes(x = lognascimentos))
+  geom_histogram(aes(x = logprice))
 # variavel real continua, não possui assimetria
 
-# log preco vs taxa analfabetismo
-ggplot(base,aes(x = tx_analfabetismo , y = lognascimentos)) + 
+# log preco vs taxa criminalidade
+ggplot(base,aes(x = crime , y = logprice)) + 
   geom_point() +
-  labs(x='taxa analfabetismo',y='log nascimentos') +
+  labs(x='taxa criminalidade',y='log preço') +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
 # parece haver relação negativa entre as variáveis
 
-# log preco vs taxa desemprego
-ggplot(base,aes(x = tx_desemprego , y = lognascimentos)) + 
+# log preco vs numero de quartos
+ggplot(base,aes(x = rooms , y = logprice, fill=rooms)) + 
   geom_point() +
-  labs(x='taxa desemprego',y='log nascimentos') +
+  labs(x='número de quartos',y='log preço') +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
 # grafico adequado
 
-# log preco vs taxa trabalho infantil
-ggplot(base,aes(x = tx_trab_infant , y = lognascimentos)) + 
+ggplot(base,aes(x = as.factor(rooms) , y = logprice, fill=rooms)) + 
+  geom_boxplot() +
+  labs(x='número de quartos',y='log preço') +
+  theme_bw() + 
+  theme(plot.title=element_text(hjust=0.5))
+# grafico para ver o comportamento das categorias: 
+# parece haver relação positiva entre as variáveis
+
+# log preco vs numero de imoveis vendidos
+ggplot(base,aes(x = sales , y = logprice)) + 
   geom_point() +
-  labs(x='taxa trabalho infantil',y='log nascimentos') +
+  labs(x='imoveis vendidos',y='log preço') +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
 # não é possível concluir que há algum tipo de relação
 
+# log preco vs tempo ate o centro comercial
+ggplot(base,aes(x = driveshop , y = logprice)) + 
+  geom_point() +
+  labs(x='tempo até comércio',y='log preço') +
+  theme_bw() + 
+  theme(plot.title=element_text(hjust=0.5))
+# não é possível concluir que há algum tipo de relação
+
+# log preco vs tipo de imovel
+ggplot(base,aes(x = type , y = logprice, fill=type)) + 
+  geom_boxplot(col="gray40") +
+  labs(x='tipo de imóvel',y='log preço') +
+  theme_bw() + 
+  theme(plot.title=element_text(hjust=0.5))
+# de forma geral, há diferença nos preços dos imóveis: mais caras- detached e 
+# mais baratas- flat e terrace
 
 
 ## Análise espacial
 
+
 # juntando as informacoes numa base unica
-base.sp <- merge(base, RJ, by=c("CD_MUN","NM_MUN"), all.x=F, all.y=F)
+base.sp <- merge(x=GGHB.IG, y=base, by="IG", all.x=FALSE)
+
 
 # O pacote leaflet precisa das coordenadas em lat/long
 # Precisamos transformar o sistema de coordenadas
 base.sp <- spTransform(base.sp,CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
-# fazendo o mapa do nascimentos
-colours <- colorNumeric(palette = "YlOrRd", domain = base.sp@data$nascimentos)
+# fazendo o mapa do preço
+colours <- colorNumeric(palette = "YlOrRd", domain = base.sp@data$price)
 map1 <- leaflet(data=base.sp) |>
-  addTiles() |>
-  addPolygons(fillColor = ~colours(nascimentos), color="", weight=1,
-              fillOpacity = 0.8) |>
-  addLegend(pal = colours, values = base.sp@data$nascimentos, opacity = 1,
-            title="nascimentos") |>
-  addScaleBar(position="bottomleft")
+        addTiles() |>
+        addPolygons(fillColor = ~colours(price), color="", weight=1,
+                    fillOpacity = 0.8) |>
+        addLegend(pal = colours, values = base.sp@data$price, opacity = 1,
+                  title="Price") |>
+        addScaleBar(position="bottomleft")
 map1
-# mais escuros, maiores os nascimentoss
-# localmente há áreas que formam clusters em relação aos nascimentoss
+# mais escuros, maiores os preços
+# localmente há áreas que formam clusters em relação aos preços
 
 
 ## Regressao Nao Espacial
 
-form <- lognascimentos ~ tx_analfabetismo + tx_desemprego + tx_trab_infant 
+form <- logprice ~ crime + rooms + sales + factor(type) + driveshop
 model <- lm(formula=form, data=base.sp@data)
 summary(model) # todas as variáveis significativas
 AIC(model) 
@@ -127,7 +162,7 @@ map2 <- leaflet(data=base.sp) |>
   addPolygons(fillColor = ~colours(LISA), color="", weight=1,
               fillOpacity = 0.8) |>
   addLegend(pal = colours, values = base.sp@data$LISA, opacity = 1,
-            title="nascimentos") |>
+            title="Price") |>
   addScaleBar(position="bottomleft")
 map2
 # valores nos grupos indicam indice alto ou baixo -> clusters, dependencia local
@@ -137,7 +172,7 @@ map2
 
 ## MODELO CAR
 
-form <- lognascimentos ~ tx_analfabetismo + tx_desemprego + tx_trab_infant 
+form <- logprice ~ crime + rooms + sales + factor(type) + driveshop
 nc_car <- spautolm(formula = form,
                    data = base.sp@data,
                    listw =  W.list,
@@ -237,5 +272,6 @@ ggplot(base.sp@data,aes(x = r_car , y = r_ind)) +
 # pelas medidas vistas (AIC)
 
 
-  
-  
+
+```
+
