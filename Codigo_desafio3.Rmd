@@ -14,7 +14,8 @@ library(ggplot2)
 library(spdep)
 library(spatialreg)
 library(rgdal)
-library(leaflet)}
+library(leaflet)
+library(readxl)}
 
 # Carregando os dados 
 RJ= st_read("RJ_Municipios_2020.shp")
@@ -28,96 +29,71 @@ base = nascimentos |>
   left_join(desemprego) |> 
   left_join(trab_infantil) 
 
-# price: preço mediano dos imóveis vendidos em 2008 (em milhares de libras)
-# crime: taxa de criminalidade por 10 mil habitantes
-# rooms: número médio de quartos em um imóvel
-# sales: número de imóveis vendidos em um ano
-# driveshop: tempo médio gasto dirigindo até o centro comercial mais próximo
-# type: tipo de propriedade de maior prevalencia em cada área - apartamento (flat),
-#       terraço (terraced), geminada (semi) e não geminada (detached).
+# nascimentos: quantidade de nascidos vivos
+# tx_analfabetismo: Percentual de pessoas com 15 anos ou mais de idade que não sabem ler e escrever pelo menos um bilhete simples, no idioma que conhecem, na população total residente da mesma faixa etária, em determinado espaço geográfico, no ano considerado
+# tx_desemprego: Percentual da população de 16 anos e mais, economicamente ativa, desocupada.
+# tx_trab_infant: Percentual da população de 10 a 15 anos ocupada.
+
 
 
 ## Analise dos dados
 
-# Histogram do preço dos imoveis
+# Histogram dos nascimentos
 ggplot(base)+
-  geom_histogram(aes(x = price))
+  geom_histogram(aes(x = nascimentos))
+
 
 # Histogram do log do preço dos imoveis
-base <- base |> mutate(logprice = log(base$price))
+base <- base |> mutate(lognascimentos = log(base$nascimentos))
 ggplot(base)+
-  geom_histogram(aes(x = logprice))
+  geom_histogram(aes(x = lognascimentos))
 # variavel real continua, não possui assimetria
 
-# log preco vs taxa criminalidade
-ggplot(base,aes(x = crime , y = logprice)) + 
+# log preco vs tx_analfabetismo
+ggplot(base,aes(x = tx_analfabetismo , y = lognascimentos)) + 
   geom_point() +
-  labs(x='taxa criminalidade',y='log preço') +
+  labs(x='tx_analfabetismo',y='log preço') +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
 # parece haver relação negativa entre as variáveis
 
-# log preco vs numero de quartos
-ggplot(base,aes(x = rooms , y = logprice, fill=rooms)) + 
+# log preco vs tx_desemprego
+ggplot(base,aes(x = tx_desemprego , y = lognascimentos)) + 
   geom_point() +
-  labs(x='número de quartos',y='log preço') +
+  labs(x='tx_desemprego',y='log preço') +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
 # grafico adequado
 
-ggplot(base,aes(x = as.factor(rooms) , y = logprice, fill=rooms)) + 
-  geom_boxplot() +
-  labs(x='número de quartos',y='log preço') +
-  theme_bw() + 
-  theme(plot.title=element_text(hjust=0.5))
-# grafico para ver o comportamento das categorias: 
-# parece haver relação positiva entre as variáveis
-
-# log preco vs numero de imoveis vendidos
-ggplot(base,aes(x = sales , y = logprice)) + 
+# log preco vs tx_trab_infant
+ggplot(base,aes(x = tx_trab_infant , y = lognascimentos)) + 
   geom_point() +
-  labs(x='imoveis vendidos',y='log preço') +
+  labs(x='tx_trab_infant',y='log preço') +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
-# não é possível concluir que há algum tipo de relação
+# grafico adequado
 
-# log preco vs tempo ate o centro comercial
-ggplot(base,aes(x = driveshop , y = logprice)) + 
-  geom_point() +
-  labs(x='tempo até comércio',y='log preço') +
-  theme_bw() + 
-  theme(plot.title=element_text(hjust=0.5))
-# não é possível concluir que há algum tipo de relação
 
-# log preco vs tipo de imovel
-ggplot(base,aes(x = type , y = logprice, fill=type)) + 
-  geom_boxplot(col="gray40") +
-  labs(x='tipo de imóvel',y='log preço') +
-  theme_bw() + 
-  theme(plot.title=element_text(hjust=0.5))
-# de forma geral, há diferença nos preços dos imóveis: mais caras- detached e 
-# mais baratas- flat e terrace
 
 
 ## Análise espacial
-
-
+ 
 # juntando as informacoes numa base unica
-base.sp <- merge(x=GGHB.IG, y=base, by="IG", all.x=FALSE)
-
+base.sp <- merge(x=RJ, y=base, by="NM_MUN", all.x=FALSE)
+head(base.sp)
 
 # O pacote leaflet precisa das coordenadas em lat/long
 # Precisamos transformar o sistema de coordenadas
 base.sp <- spTransform(base.sp,CRS("+proj=longlat +datum=WGS84 +no_defs"))
 
 # fazendo o mapa do preço
-colours <- colorNumeric(palette = "YlOrRd", domain = base.sp@data$price)
+colours <- colorNumeric(palette = "YlOrRd", domain = base.sp$nascimentos)
 map1 <- leaflet(data=base.sp) |>
         addTiles() |>
-        addPolygons(fillColor = ~colours(price), color="", weight=1,
+        addPolygons(fillColor = ~colours(nascimentos), color="", weight=1,
                     fillOpacity = 0.8) |>
-        addLegend(pal = colours, values = base.sp@data$price, opacity = 1,
-                  title="Price") |>
+        addLegend(pal = colours, values = base.sp$nascimentos, opacity = 1,
+                  title="Nascimentos") |>
         addScaleBar(position="bottomleft")
 map1
 # mais escuros, maiores os preços
@@ -126,7 +102,7 @@ map1
 
 ## Regressao Nao Espacial
 
-form <- logprice ~ crime + rooms + sales + factor(type) + driveshop
+form <- lognascimentos ~ tx_analfabetismo + tx_desemprego + tx_trab_infant + factor(type) + driveshop
 model <- lm(formula=form, data=base.sp@data)
 summary(model) # todas as variáveis significativas
 AIC(model) 
@@ -162,7 +138,7 @@ map2 <- leaflet(data=base.sp) |>
   addPolygons(fillColor = ~colours(LISA), color="", weight=1,
               fillOpacity = 0.8) |>
   addLegend(pal = colours, values = base.sp@data$LISA, opacity = 1,
-            title="Price") |>
+            title="nascimentos") |>
   addScaleBar(position="bottomleft")
 map2
 # valores nos grupos indicam indice alto ou baixo -> clusters, dependencia local
@@ -172,7 +148,7 @@ map2
 
 ## MODELO CAR
 
-form <- logprice ~ crime + rooms + sales + factor(type) + driveshop
+form <- lognascimentos ~ tx_analfabetismo + tx_desemprego + tx_trab_infant + factor(type) + driveshop
 nc_car <- spautolm(formula = form,
                    data = base.sp@data,
                    listw =  W.list,
