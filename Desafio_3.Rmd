@@ -42,290 +42,275 @@ p_load(char = c("kableExtra",
 
 # Objetivo
 
-O estudo se baseia no conjunto de dados referentes a segurados de uma empresa e residentes no município do Rio de Janeiro.
+O estudo se baseia no conjunto de dados provenientes do CENSO Demográfico de 2010, realizado pelo Instituto Brasileiro de Geografia e Estatística (IBGE), e foram retirados da plataforma TABNET do Departamento de Informática do Sistema Único de Saúde (DATASUS), com enfoque no estado do Rio de Janeiro.
 
-As informações contêm a localização geográfica das residências dos segurados e seus devidos prêmios do seguro.
+Os pesquisadores Igor Freitas e João Pedro Fernandes vão prestar uma consultoria à Secretaria de Educação do Governo do estado do Rio de Janeiro e estão encarregados de analisar se a taxa de analfabetismo no estado do RJ em 2010 (ano do último CENSO) pode ser modelada por um modelo de dependência espacial com base na taxa de desemprego e de trabalho infantil, sendo que essa variáveis podem ser definidas como: 
 
-Os pesquisadores Igor Freitas e João Pedro Fernandes, recém-contratados por uma empresa de seguro de automóveis, estão encarregados de precificar o valor pago pelos segurados, analisando a dependência espacial na região estudada.
+* taxa de analfabetismo: Percentual da população de 15 anos ou mais que não sabe ler e escrever;
+
+* taxa de desemprego: Percentual da população de 16 anos ou mais, economicamente ativa (PEA), desocupada;
+
+* taxa de trabalho infantil: Percentual da população de 10 a 15 anos ocupada.
+
 
 
 # Análises exploratórias {.tabset .tabset-fade .tabset-pills}
 
 ## Parte I 
 
-Os dados totalizam 211 observações de 3 variáveis, referentes à latitude e à longitude das residências dos segurados e ao prêmio do seguro para pessoas que residem no município do Rio de Janeiro.
-
-Como é possível observar no mapa abaixo, grande parte dos pontos se localizam à direita do mapa, o que ocasiona vazios em relação às observações principalmente na Zona Oeste da cidade.
+Os dados totalizam 92 observações referentes à localização geográfica, à identificação e às variáveis de interesse para os 92 municípios do Rio de Janeiro.
 
 ```{r results='hide'}
-library(raster)
-library(tidyverse)
-library(geoR)
-library(readxl)
-library(rgdal)
+{library(CARBayesdata)
+  library(sp)
+  library(dplyr)
+  library(sf)
+  library(ggplot2)
+  library(spdep)
+  library(spatialreg)
+  library(rgdal)
+  library(leaflet)
+  library(readxl)
+  library(gridExtra)}
 
-# Lendo a base de dados
-base <- read_excel("seguro_auto.xlsx")
+# Carregando os dados 
+RJ= st_read("RJ_Municipios_2020.shp")
+analfabetismo = read_excel("analfabetismo_rj.xlsx")
+desemprego = read_excel("desemprego_rj.xlsx")
+trab_infantil = read_excel("trab_infantil_rj.xlsx")
+# nascimentos = read_excel("nascimentos_rj.xlsx") 
+# populacao = read_excel("populacao_rj.xlsx")
 
-# Lendo o SHAPE
-mapaRJ <- readOGR("Limite_Bairro_si.shp",layer="Limite_Bairro_si")
+base = analfabetismo |> 
+  left_join(desemprego) |> 
+  left_join(trab_infantil) 
+
+# tx_analfabetismo: Percentual de pessoas com 15 anos ou mais de idade que não sabem ler e escrever pelo menos um bilhete simples, no idioma que conhecem, na população total residente da mesma faixa etária, em determinado espaço geográfico, no ano considerado
+# tx_desemprego: Percentual da população de 16 anos e mais, economicamente ativa, desocupada.
+# tx_trab_infant: Percentual da população de 10 a 15 anos ocupada.
 ```
+
+Analisando histogramas, chega-se à conclusão que os valores da taxa de analfabetismo têm comportamento assimétrico à direita, com maior variabilidade, já que há pontos cujos valores muito altos (outliers). Já o log da taxa apresenta comportamento se assemelhando à distribuição normal, diminuindo a variabiidade, corrigindo a assimetria e estabilizando um pouco a incerteza. 
+Dessa forma, escolhe-se modelar o logaritmo da taxa.
 
 ```{r fig.height = 5, include = TRUE}
+## Analise dos dados
 
-# Mapa com pontos
-par(mar=c(4,4,0,0),cex=1.4)
-plot(mapaRJ,xlab="longitude",ylab="latitude")
-points(base$long,base$lat,col=2,pch=21,bg=5)
-axis(1)
-axis(2)
-
+# Histograma da tx_analfabetismo
+par(mfrow=c(1,2),mar=c(4,4,0.5,0.5))
+hist(base$tx_analfabetismo,main="",xlab="Taxa de Analfabetismo",ylab="Frequência")
+hist(log(base$tx_analfabetismo),main="",xlab="Log da Taxa de Analfabetismo",ylab="Frequência")
 ```
 <center><font size="2">
-**Figura 1 - Mapa do município do Rio de Janeiro com as observações referentes às residências dos segurados**
+**Figura 1 - Histogramas da taxa de analfabetismo e do logaritmo da taxa de analfabetismo**
 </center></font>
+
 
 ## Parte II
 
-Analisando histogramas, chega-se à conclusão que os valores do prêmio têm comportamento assimétrico, com maior variabilidade, já que há pontos cujos valores de seguro são muito altos (outliers). Já o log do prêmio apresenta comportamento se assemelhando à distribuição normal, diminuindo a variabiidade e estabilizando um pouco a incerteza. 
-Dessa forma, escolhe-se modelar o logaritmo do prêmio.
+### Log (taxa de analfabetismo) x taxa de desemprego
 
+Comparando-se as variáveis log (taxa de analfabetismo) e taxa de desemprego,
+não dá para perceber alguma relação tão evidente entre as variáveis mas parece que, principalmente para certos pontos, quanto maior o logaritmo da taxa de analfabetismo, menor a taxa de desemprego.
+
+```{r results='hide'}
+# juntando as informacoes numa base unica
+base.sp <- merge(x=RJ, y=base, by="NM_MUN", all.x=FALSE)
+head(base.sp)
+```
 
 ```{r fig.height = 5, include = TRUE}
-# Histograma do premio
-par(mfrow=c(1,2),mar=c(4,4,0.5,0.5))
-hist(base$premio,main="",xlab="Prêmio",ylab="Frequência")
-hist(log(base$premio),main="",xlab="Log(prêmio)",ylab="Frequência")
-
+# log tx_analfabetismo vs tx_desemprego
+ggplot(base.sp,aes(x = tx_desemprego, y = log(tx_analfabetismo))) + 
+  geom_point() +
+  labs(x='taxa de desemprego',y='log taxa de analfabetismo') +
+  theme_bw() + 
+  theme(plot.title=element_text(hjust=0.5)) +
+  geom_smooth(method = "lm",
+              color = "tomato",
+              se = FALSE)
+# não dá para perceber alguma relação tão evidente entre as variáveis
 ```
 <center><font size="2">
-**Figura 2 - Histogramas do prêmio e do logaritmo do prêmio dos segurados**
+**Figura 2 - Gráfico de dispersão para as variáveis taxa de desemprego e log da taxa de analfabetismo**
 </center></font>
 
+
+### Log (taxa de analfabetismo) x taxa de trabalho infantil
+
+Agora confrontando as variáveis log (taxa de analfabetismo) e taxa de desemprego,
+novamente não é possível notar alguma relação clara entre as variáveis, porém parece que, principalmente para certos pontos, quanto maior o logaritmo da taxa de analfabetismo, maior a taxa de trabalho infantil.
+
+```{r results='hide'}
+# juntando as informacoes numa base unica
+base.sp <- merge(x=RJ, y=base, by="NM_MUN", all.x=FALSE)
+head(base.sp)
+```
+
+```{r fig.height = 5, include = TRUE}
+# log tx_analfabetismo vs tx_trab_infant
+ggplot(base.sp,aes(x = tx_trab_infant, y = log(tx_analfabetismo))) + 
+  geom_point() +
+  labs(x='taxa de trabalho infantil',y='log taxa de analfabetismo') +
+  theme_bw() + 
+  theme(plot.title=element_text(hjust=0.5)) +
+  geom_smooth(method = "lm",
+              color = "tomato",
+              se = FALSE)
+# não dá para perceber alguma relação tão evidente entre as variáveis
+```
+<center><font size="2">
+**Figura 3 - Gráfico de dispersão para as variáveis taxa de desemprego e log da taxa de trabalho infantil**
+</center></font>
 
 
 # Análise geoestatística {.tabset .tabset-fade .tabset-pills}
 
 ## Parte I 
 
-Interpretando os gráficos gerados a seguir (Figura 3), percebe-se que a maioria das observações relativas às residências dos segurados se encontram na faixa nordeste do município (ao norte e ao leste) e que os valores do logaritmo do prêmio pago pelo segurado estão concentrados entre 7 e 8, em média, e aparentam apresentar distribuição normal.
+Investigando o mapa com relação às taxas de analfabetismo no estado, verifica-se que os maiores percentuais de pessoas analfabetizadas são relacionados às regiões Serrana, Norte e Noroeste Fluminense. Já na região metropolitana, parece haver os menores índices.
 
-```{r results='hide'}
-base$log_premio <- log(base$premio)
-
-# Transformando em geodata (para usar as funcoes do pacote geoR)
-dados <- as.geodata(base, coords.col = 3:2, data.col = 4, covar.col=1)
-```
+Aparenta existir alguns clusters na divisa entre as regiões Serrana e Noroeste, em que os valores das taxas ao redor deles são mais baixos do que dentro deles.
 
 ```{r fig.height = 5, include = TRUE}
 
-plot(dados)
+# fazendo o mapa do preço
+colours <- colorNumeric(palette = "YlOrRd", domain = base.sp$tx_analfabetismo)
+map1 <- leaflet(data=base.sp) |>
+  addTiles() |>
+  addPolygons(fillColor = ~colours(tx_analfabetismo), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp$tx_analfabetismo, opacity = 1,
+            title="taxa analfabetismo") |>
+  addScaleBar(position="bottomleft")
+map1
+# mais escuros, maiores as taxas
+# localmente há áreas que formam clusters em relação às taxas
 ```
 <center><font size="2">
-**Figura 3- Gráficos referentes às localizações geográficas das residências dos segurados e o logaritmo do prêmio**
+**Figura 4 - Mapa referente às taxas de analfabetismo para o estado do Rio de Janeiro**
 </center></font>
-
-Pela Figura 4, são tiradas algumas indicações a partir do gráfico. Os segurados na faixa à noroeste apresentam valores próximos de prêmios, assim como os residentes da Zona Sul, por exemplo. 
-
-É possível notar que os maiores valores de prêmios a serem pagos pelos segurados estão, principalmente, à direita e acima do gráfico (maior presença de bolhas brancas). 
-
-Também observa-se que praticamente todas as regiões apresentam observações com pequeno valor de prêmio (bolhas verdes ou amarelas) ao mesmo tempo que observações com valores de prêmio maiores (bolhas rosas ou brancas). 
-
-
-```{r results='hide'}
-par(mfrow=c(1,1))
-points(dados,cex.min=1, cex.max=5, pt.sizes="quintiles",
-       col=terrain.colors(5),xlab="longitude",ylab="latitude")
-
-```
-<!-- <center><font size="2"> -->
-<!-- **Figura 4 - Gráfico de quantis dos valores do logaritmo do prêmio pelo segurado** -->
-<!-- </center></font> -->
-
-<center>
-
-![**Figura 4 - Gráfico de quantis dos valores do logaritmo do prêmio pelo segurado**](bolhas.png)
-
-</center>
 
 ## Parte II
 
-Analisando o semivariograma empírico e a tendência estimada por máxima verossimilhança (Figura 5), verifica-se que, após testar os modelos da família matern, esférica, exponencial e gaussiana, optou-se pela utilização do modelo gaussiano. 
+### Log (taxa de analfabetismo) x taxa de desemprego
 
-O alcance (distância até se chegar no patamar) encontrado foi bem pequeno, indicando uma subida rápida nos valores do semivariograma. Assim, já para pequenas distâncias, não há tanta dependência espacial.
+As maiores taxas de desemprego estão nas regiões Metropolitana, Baixadas Litorâneas e Norte Fluminense. 
 
-```{r results='hide'}
-# Variograma empirico
-v <- geoR::variog(dados,trend= ~ dados$coords)
-
-par(mfrow=c(1,1),mar=c(4,4,0.5,0.5),cex=1.5)
-plot(v,pch=16,col=4,xlab="distancia",ylab="semivariograma",ylim=c(0,0.5))
-
-# eyefit(v)
-
-# Estimando via MV
-# opcoes para trend: cte (media constante), 1st (tendencia linear) e 2st (tendencia quadratica).
-
-# trend.spatial(~coords + sinistro, dados)[1:5,]
-
-
-# Estimando o efeito pepita:
-mv <- likfit(dados, ini=c(0.1,0.1), trend = trend.spatial(~coords, dados), cov.model="gaussian", fix.nugget = TRUE, nugget=0.15)
-summary(mv)
-```
-
-```{r fig.height = 5, include = TRUE}
-par(mfrow=c(1,1))
-plot(v,col=4,xlab="distância",ylab="semivariograma",ylim=c(0,0.5))
-lines(mv,lty=1,col="blue")
-
-```
-<center><font size="2">
-**Figura 5 - Semivariograma empírico**
-</center></font>
-
-## Parte III
-
-De acordo com a Figura 6, é possível tirar algumas conclusões: 
-
-* existem regiões com prêmios muito altos, porém com locais na mesma região com valores de prêmios baixos;
-
-* confirmando o alcance pequeno observado anteriormente: próximo à região escura, em pequenas distâncias já não há dependências expressivas entre os dados;
-
-* a Zona Sul e a faixa mais à oeste do mapa aparentam apresentar os valores de prêmios mais baixos e as regiões com vias expressas, próximos de locais favelizados e na divisa de municípios, por exemplo, os mais altos.
-
-```{r results='hide'}
-
-### Interpolacao ponderada pelo inverso da distancia
-
-library(gstat)
-library(sp)
-
-base.idw <- as.data.frame(cbind(dados$coords,dados$data))
-coordinates(base.idw) <- c("long", "lat")
-
-summary(dados$coords)
-long = seq(-43.8,-43.1,l=50)
-lat = seq(-23.1,-22.79,l=50)
-nx = length(long)
-ny = length(lat)
-# criando o grid de pontos para interpolar
-grid = as.data.frame(expand.grid(long,lat))
-
-# coordenadas dos pontos do grid
-coordinates(grid) = ~Var1+Var2
-
-# interpolacao
-interpol <- idw(V3~1, base.idw, newdata = grid, idp = 2)
-interpol.matriz = matrix(interpol$var1.pred,nx,ny)
-```
-
+De forma geral, a taxa de analfabetismo e de desemprego parecem ter uma relação inversa, em que municípios com maiores taxas de analfabetismo tendem a possuir menores taxas de desemprego. Essa relação parece fazer sentido, pois pessoas não analfabetas podem desejar exercer cargos mais altos, o que gera alguma superlotação em alguns mercados, ocasionando maior número de desempregados.
 
 ```{r fig.height = 5, include = TRUE}
 
-# grafico
-#opcao 1
-filled.contour(long, lat,interpol.matriz,
-               key.title = title(main = "log prêmio", cex.main = 1),
-               plot.axes={axis(1)
-                 axis(2)
-                 plot(mapaRJ,xlab="longitude",ylab="latitude",add=TRUE)
-               })
+# Mapa da tx_desemprego
+colours <- colorNumeric(palette = "YlOrRd", domain = base.sp$tx_desemprego)
+map2 <- leaflet(data=base.sp) |>
+  addTiles() |>
+  addPolygons(fillColor = ~colours(tx_desemprego), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp$tx_desemprego, opacity = 1,
+            title="taxa desemprego") |>
+  addScaleBar(position="bottomleft")
+map2
+
+# parece que as menores taxas de desemprego se encontram na região serrana e no
+# interior do estado
+
 ```
 <center><font size="2">
-**Figura 6 - Mapa com a interpolação ponderada pelo inverso da distância**
+**Figura 5 - Mapa referente às taxas de desemprego para o estado do Rio de Janeiro**
 </center></font>
 
-## Parte IV
+### Log (taxa de analfabetismo) x taxa de trabalho infantil
 
-Pelo histograma a seguir, usando uma janela de 2.500 pontos preditos, percebe-se que o y ajustado parece ter distribuição normal com valores em torno de 7 e 8 e média próxima a 7,5.
+As maiores taxas de trabalho infantil se encontram nas regiões Serrana e Noroeste Fluminense para os municípios próximos à divisa com o estado de Minas Gerais. 
 
-```{r results='hide'}
-
-### Krigagem
-
-long.pred = seq(-43.8,-43.1,l=50)
-lat.pred = seq(-23.1,-22.79,l=50)
-grid.pred <- expand.grid(long.pred,lat.pred)
-
-
-# krigagem
-krigagem <- krige.conv(dados, loc=grid.pred,
-                       krige=krige.control(type.krige="SK",
-                                           trend.d = trend.spatial(~coords, dados),
-                                           trend.l = trend.spatial(~Var1+Var2, grid.pred),
-                                           beta=mv$beta,
-                                           nugget=mv$nugget,
-                                           cov.pars=c(0.1884,0.01)))
-```
+As taxas de analfabetismo e de trabalho infantil aparentam não possuir interação positiva. 3 municípios têm altas taxas de trabalho infantil, sendo eles outliers.
+Isso interfere numa possível interpretação, sendo assim, será feito uma análise retirando esses outliers para verificar se alguma relação pode ser observada.
 
 ```{r fig.height = 5, include = TRUE}
 
-hist(krigagem$predict, ylab="Frequência", xlab="Predições por krigagem", main="")
+# Mapa da tx_trab_infant
+colours <- colorNumeric(palette = "YlOrRd", domain = base.sp$tx_trab_infant)
+map3 <- leaflet(data=base.sp) |>
+  addTiles() |>
+  addPolygons(fillColor = ~colours(tx_trab_infant), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp$tx_trab_infant, opacity = 1, 
+            title="taxa trabalho infantil") |>
+  addScaleBar(position="bottomleft")
+map3
+
 ```
 <center><font size="2">
-**Figura 7- Histograma dos valores do logaritmo do prêmio preditos por krigagem simples**
+**Figura 6 - Mapa referente às taxas de trabalho infantil para o estado do Rio de Janeiro**
 </center></font>
 
-Pela superfície apresentada na Figura 8, os menores valores a serem pagos pelos segurados são os de residentes em zonas nobres, como a Zona Sul. 
+Após retirar os 3 outliers, foi ajustado um outro mapa com as informações da taxa de trabalho infantil e através dele, percebe-se que na divisa com Minas Gerais, a alta taxa de trabalho infantil implica em valores também altos para a taxa de analfabetismo. Por outro lado, esse comportamento parece ser inverso na região das Baixadas Litorâneas.
 
-Em comparação, os maiores prêmios estão concentrados em regiões que cruzam vias expressas, divisas de municípios, dentre outras áreas espalhadas pela cidade.
+```{r fig.height = 5, include = TRUE}
 
-```{r results='hide'}
-
-plot(mapaRJ,xlab="longitude",ylab="latitude",xaxt = "n", yaxt = "n", 
-     bty = "n",type="n")
-
-# media
-par(mfrow=c(1,1),mar=c(4,4,0.5,0.5))
-image(krigagem, loc=grid.pred, 
-      col=terrain.colors(256))
-plot(mapaRJ,xlab="longitude",ylab="latitude",add=TRUE)
+# Mapa da tx_trab_infant
+base.sp2 = filter(base.sp,tx_trab_infant<15)
+colours <- colorNumeric(palette = "YlOrRd", domain = base.sp2$tx_trab_infant)
+map4 <- leaflet(data=base.sp2) |> 
+  addTiles() |>
+  addPolygons(fillColor = ~colours(tx_trab_infant), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp2$tx_trab_infant, opacity = 1, 
+            title="taxa trabalho infantil") |>
+  addScaleBar(position="bottomleft")
+map4
 
 ```
+<center><font size="2">
+**Figura 7 - Mapa referente às taxas de trabalho infantil para o estado do Rio de Janeiro, exceto os outliers**
+</center></font>
 
-<center>
+## Parte II
 
-![**Figura 8- Superfície de predição média dos valores do prêmio a partir de krigagem simples**](mapa_media.png)
+### Regressao Não Espacial
 
-</center>
+```{r fig.height = 5, include = TRUE}
 
-Na Figura 9, percebe-se que na Zona Oeste, principalmente, há poucas observações registradas, o que gera uma grande incerteza sobre as predições dos valores do prêmio nessa região.
+form <- log(tx_analfabetismo) ~ tx_desemprego + tx_trab_infant
+model <- lm(formula=form, data=base.sp)
+summary(model) # tx_analfabetismo variáveis significativas
+AIC(model) # AIC = 112.3685
 
-O que não ocorre na parte mais ao leste e ao norte do mapa, em que existe mais certeza encontrada, ou seja, muitos pontos ao redor e menor variância de predição.
+# Matriz de vizinhança (W)
+W.nb <- poly2nb(base.sp, row.names = rownames(base.sp))
+W.list <- nb2listw(W.nb, style="B")
+W.list
 
-```{r results='hide'}
+# Indice de Moran Global
+globalMoran <- moran.test(residuals(model), W.list)
+globalMoran
+# H0: I=0 versus H1: I!=0
+# Estatistica de teste 0.32 e p-valor pequeno -> rejeita H0, indicando que
+# há estrutura de dependencia espacial nos residuos do modelo
 
-# Mapa com pontos
-par(mar=c(4,4,0,0),cex=1.4)
-plot(mapaRJ,xlab="longitude",ylab="latitude")
-points(base$long,base$lat,col=2,pch=21,bg=5)
-axis(1)
-axis(2)
+# Indice de Moral Local (LISA)
+localMoran <- localmoran(residuals(model), W.list)
+localMoran
 
-# variancia
-par(mfrow=c(1,1),mar=c(4,4,0.5,0.5))
-image(krigagem, loc=grid.pred, 
-      values=krigagem$krige.var, col=terrain.colors(256))
-plot(mapaRJ,xlab="longitude",ylab="latitude",add=TRUE)
+base.sp <- cbind(base.sp,LISA = localMoran[,4])
+
+
+ggplot(base.sp)+
+  geom_histogram(aes(x = LISA))
+# as áreas em torno do 0 indicam não dependência
+# as áreas com LISA maior ou menor indicam dependência
+
+
+colours <- colorNumeric(palette = "Greens", domain = base.sp$LISA)
+map2 <- leaflet(data=base.sp) |>
+  addTiles() |>
+  addPolygons(fillColor = ~colours(LISA), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp$LISA, opacity = 1,
+            title="tx_analfabetismo") |>
+  addScaleBar(position="bottomleft")
+map2
+# valores nos grupos indicam indice alto ou baixo -> clusters, dependencia local
+# dependencia global não tão alta
 ```
-
-<center>
-
-![**Figura 9- Superfície de variância de predição dos valores do prêmio a partir de krigagem simples**](mapa_variancia.png)
-
-</center>
-
-# Conclusões {.tabset .tabset-fade .tabset-pills}
-
-Neste trabalho, após traçar um objetivo inicial, foram feitas análises exploratórias e geoestatísticas por meio de gráficos e mapas.
-
-Com isso, foi possibilitado plotar o semivariograma empírico e estimar a tendência por máxima verossimilhança após testar diferentes modelos. O alcance encontrado foi pequeno, o que indicou que para distâncias já não muito grandes, a dependência espacial não era expressiva. 
-
-Por fim, é possível concluir que, através dos métodos de interpolação ponderada pelo inverso da distância e krigagem simples:
-
-* as regiões com prêmios mais altos estão localizadas em áreas como as de vias expressas, divisa de municípios, principalmente mais ao norte e à direita do mapa da cidade;
-
-* já os menores valores a serem pagos pelos segurados são os de residentes em zonas nobres, como a Zona Sul;
-
-* a Zona Oeste apresenta poucas observações registradas, ocasionando uma certa incerteza sobre as predições dos valores do prêmio nessa região, ao contrário das zonas mais ao leste e ao norte do mapa, que possuem menor variabilidade em relação às suas observações.
