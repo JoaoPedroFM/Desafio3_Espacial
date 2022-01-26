@@ -195,7 +195,7 @@ map1
 
 ## Parte II
 
-### Log (taxa de analfabetismo) x taxa de desemprego
+### Taxa de analfabetismo x taxa de desemprego
 
 As maiores taxas de desemprego estão nas regiões Metropolitana, Baixadas Litorâneas e Norte Fluminense. 
 
@@ -222,7 +222,7 @@ map2
 **Figura 5 - Mapa referente às taxas de desemprego para o estado do Rio de Janeiro**
 </center></font>
 
-### Log (taxa de analfabetismo) x taxa de trabalho infantil
+### Taxa de analfabetismo x taxa de trabalho infantil
 
 As maiores taxas de trabalho infantil se encontram nas regiões Serrana e Noroeste Fluminense para os municípios próximos à divisa com o estado de Minas Gerais. 
 
@@ -270,9 +270,26 @@ map4
 
 ## Parte III
 
-### Regressao Não Espacial
+### Regressão Não Espacial
 
-```{r fig.height = 5, include = FALSE}
+Realizando a regressão do tipo não espacial (Tabela 1), verifica-se que as variáveis taxas de desemprego e de trabalho infantil são significativas ao nível de 10% de significância. O valor do critério de Akaike (AIC) encontrado foi de 112.3685 e pelo R² ajustado, pode-se dizer que 10,4% da variabilidade do modelo podem ser explicados pelas variáveis regressoras.
+
+| | Estimativa | Erro Padrão | Est. t | Pr($>$$|$t$|$)|
+|:-------:|:-----:|:-------------:|:--------:|:---------------:|
+|(Intercepto) | 2.04538 | 0.21624 | 9.459 | 4.2e-15 |
+ | Taxa de desemprego | -0.03737 | -0.03737 | -1.902 | 0.06040 |
+  |Taxa de trabalho infantil | 0.03137 | 0.01430 | 2.194 | 0.03080| 
+ | | | | | |
+| | AIC = 112.3685 | R²=0.1038 | | |
+<center><font size="2">
+**Tabela 1. Modelo de Regressão Não Espacial.**
+</center></font>
+<br>
+
+Realizando o Teste do Índice de Moran Global, foi confrontada a hipótese de que esse índice era igual a 0 versus a hipótese de que seria diferente desse valor.
+Para a avaliação do teste, foi obtido o valor da estatística de teste igual a 0.32 e como o p-valor é pequeno, próximo a zero, rejeita-se H0, indicando que há estrutura de dependência espacial nos resíduos do modelo.
+
+```{r results='hide'}
 
 form <- log(tx_analfabetismo) ~ tx_desemprego + tx_trab_infant
 model <- lm(formula=form, data=base.sp)
@@ -297,37 +314,49 @@ localMoran
 
 base.sp <- cbind(base.sp,LISA = localMoran[,4])
 
+```
+
+Observando as Figuras 8 e 9, é possível verificar que o Índice de Moral Local (LISA) possui uma certa concentração de valores em torno do zero, que indicam que a dependência global não é tão alta, mas também apresenta valores maiores em alguns grupos, indicando a presença de clusters e dependência local em certas regiões sobretudo a Metropolitana e Norte Fluminense.
+ 
+```{r fig.height = 5, include = TRUE}
 
 ggplot(base.sp)+
   geom_histogram(aes(x = LISA))
 # as áreas em torno do 0 indicam não dependência
 # as áreas com LISA maior ou menor indicam dependência
+```
+<center><font size="2">
+**Figura 8 - Histograma dos valores do Índice de Moral Local (LISA)**
+</center></font>
 
+```{r fig.height = 5, include = TRUE}
 
 colours <- colorNumeric(palette = "Greens", domain = base.sp$LISA)
-map2 <- leaflet(data=base.sp) |>
+map5 <- leaflet(data=base.sp) |>
   addTiles() |>
   addPolygons(fillColor = ~colours(LISA), color="", weight=1,
               fillOpacity = 0.8) |>
   addLegend(pal = colours, values = base.sp$LISA, opacity = 1,
-            title="tx_analfabetismo") |>
+            title="LISA") |>
   addScaleBar(position="bottomleft")
-map2
+map5
 # valores nos grupos indicam indice alto ou baixo -> clusters, dependencia local
 # dependencia global não tão alta
 ```
+<center><font size="2">
+**Figura 9 - Mapa dos valores do Índice de Moral Local (LISA)**
+</center></font>
 
 
-| | Estimativa | Erro Padrão | Est. t | Pr($>$$|$t$|$)|
-|:-------:|:-----:|:-------------:|:--------:|:---------------:|
-|(Intercepto) | 2.04538 | 0.21624 | 9.459 | 4.2e-15 |
- | Taxa de desemprego | -0.03737 | -0.03737 | -1.902 | 0.06040 |
-  |Taxa de trabalho infantil | 0.03137 | 0.01430 | 2.194 | 0.03080| 
- | | | | | |
-| | AIC = 112.3685 | R²=0.1038 | | |
+## Parte IV
 
+### Regressão Espacial
 
-### Regressao Espacial
+Ajustando o modelo CAR de regressão espacial para explicar o logaritmo da taxa de analfabetismo, pode-se constatar que, ao nível de significância de 10%, a taxa de trabalho infantil era significativa, mas a taxa de desemprego não.
+
+O $\rho$, que mede a autocorrelação espacial global, foi igual a 0.15553, valor não tão próximo de 0 nem de 1, reiterando que a dependência mais evidente é a local e não a global. Como o p-valor encontrado na saída do modelo é próximo de 0, afirma-se que o modelo não é independente e portanto, faz sentido ajustá-lo com base na dependência espacial.
+
+O AIC detectado foi de 94.393, valor menor que o do modelo independente (112.3685), indicando que o modelo CAR possui melhor ajuste.
 
 ```{r fig.height = 5, include = FALSE}
 ## MODELO CAR
@@ -339,7 +368,11 @@ nc_car <- spautolm(formula = form,
                    family = "CAR")
 
 summary(nc_car)
-AIC(nc_car)
+# tx_analfabetismo significativas, exceto a
+# rho= 0.15553 (não 0 nem 1) dependencia mais local que global
+# p-valor proximo de 0, o modelo não é independente
+# AIC penaliza quanto ao número de parâmetros, mais completo que o modelo independente
+# AIC menor que o do modelo independente-> melhor ajuste
 ```
 
 
@@ -350,9 +383,18 @@ AIC(nc_car)
 |  Taxa de trabalho infantil | 0.0123716 | 2.4828 | 2.194 | 0.01304|
 | | | | | |
 |  |AIC = 94.393 | | | |
+<center><font size="2">
+**Tabela 2. Modelo de Regressão Espacial CAR.**
+</center></font>
+<br>
 
+## Parte V
 
-### Avaliando os modelos
+### Avaliação dos modelos
+
+Pelas Figuras 10 e 11, nota-se que os resíduos do modelo CAR possuem magnitude menor do que o do modelo independente, já que se ajustou melhor e assim, o Y ajustado está mais próximo do Y verdadeiro.
+
+Os resíduos parecem estar bem distribuídos: as estruturas de dependência se fazem presentes nas regiões mais escuras, onde há efeitos maiores, nos blocos locais vistos nas outras análises.
 
 
 ```{r fig.height = 5, include = TRUE}
@@ -370,7 +412,9 @@ map3 <- leaflet(data=base.sp) |>
   addScaleBar(position="bottomleft")
 map3
 ```
-
+<center><font size="2">
+**Figura 10 - Mapa dos resíduos do modelo CAR**
+</center></font>
 
 
 ```{r fig.height = 5, include = TRUE}
@@ -383,9 +427,16 @@ map4 <- leaflet(data=base.sp) |>
   addScaleBar(position="bottomleft")
 map4
 ```
+<center><font size="2">
+**Figura 11 - Mapa dos resíduos do modelo independente**
+</center></font>
 
+### Resíduos do modelo CAR vs modelo independente
 
-### residuos modelo CAR vs modelo independente
+Pelo fato da dependência espacial encontrada ser local, a comparação dos resíduos ficou bem espelhada, não mostrando vantagens para nenhum dos modelos. A métrica utilizada para avaliar o melhor modelo será apenas o AIC, que apontou o modelo CAR como sendo o de melhor ajuste.
+
+Os pontos acima da reta parecem estar mais distantes da mesma, indicando que o modelo independente pode ter qualidade do ajuste um pouco inferior.
+
 ```{r fig.height = 5, include = TRUE}
 ggplot(base.sp,aes(x = r_car , y = r_ind)) + 
   geom_point() +
@@ -394,5 +445,15 @@ ggplot(base.sp,aes(x = r_car , y = r_ind)) +
   theme_bw() + 
   theme(plot.title=element_text(hjust=0.5))
 ```
+<center><font size="2">
+**Figura 12 - Gráfico dos resíduos do modelo independente e do modelo CAR**
+</center></font>
 
+# Conclusão
+
+Neste trabalho, após traçar um objetivo inicial, foram feitas análises exploratórias e geoestatísticas por meio de gráficos, tabelas, mapas e modelos espaciais.
+
+Com isso, foi possibilitado estimar o índice de Moran para avaliar a dependência espacial. Pelas análises gráficas, conseguimos verificar relações entre a taxa de analfabetismo e as variáveis taxa de desemprego e de trabalho infantil. 
+
+Por fim, é possível concluir que, utilizando o modelo espacial CAR, a cada incremento de 1% na taxa de trabalho infantil, o logaritmo da taxa de analfabetismo sofre um aumento de 0.031. Isto significa que há um aumento de aproximadamente 1% na taxa de analfabetismo. Como a taxa de desemprego não foi significativa, essa variável não afeta significativamente a taxa de analfabetismo.
 

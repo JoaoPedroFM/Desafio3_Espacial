@@ -193,7 +193,7 @@ map1
 
 ## Parte II
 
-### Log (taxa de analfabetismo) x taxa de desemprego
+### Taxa de analfabetismo x taxa de desemprego
 
 As maiores taxas de desemprego estão nas regiões Metropolitana, Baixadas Litorâneas e Norte Fluminense. 
 
@@ -220,7 +220,7 @@ map2
 **Figura 5 - Mapa referente às taxas de desemprego para o estado do Rio de Janeiro**
 </center></font>
 
-### Log (taxa de analfabetismo) x taxa de trabalho infantil
+### Taxa de analfabetismo x taxa de trabalho infantil
 
 As maiores taxas de trabalho infantil se encontram nas regiões Serrana e Noroeste Fluminense para os municípios próximos à divisa com o estado de Minas Gerais. 
 
