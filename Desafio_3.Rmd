@@ -35,7 +35,7 @@ p_load(char = c("kableExtra",
                 "tmap",
                 "ggplot2")) 
 
-#setwd("C:/Users/rafae/Dropbox/UFF/LES/ASSESSORIAS/2021/Mariana Seglia - Fiocruz/Atendimento LES - Mariana/Shape")
+#setwd("C:/Users/igorg/Documents/GitHub/Desafio3_Espacial")
 ```
 
 <div style="text-align: justify">
@@ -270,7 +270,7 @@ map4
 
 ### Regressao Não Espacial
 
-```{r fig.height = 5, include = TRUE}
+```{r fig.height = 5, include = FALSE}
 
 form <- log(tx_analfabetismo) ~ tx_desemprego + tx_trab_infant
 model <- lm(formula=form, data=base.sp)
@@ -314,3 +314,97 @@ map2
 # valores nos grupos indicam indice alto ou baixo -> clusters, dependencia local
 # dependencia global não tão alta
 ```
+
+\begin{table}[H]
+\centering
+\caption{Regressão não espacial}
+\begin{tabular}{rrrrr}
+  \hline
+ & Estimativa & Erro Padrão & Est. t & Pr($>$$|$t$|$) \\ 
+  \hline
+(Intercepto) & 2.04538 & 0.21624 & 9.459 & 4.2e-15 \\ 
+  Taxa de desemprego & -0.03737 & -0.03737 & -1.902 & 0.06040 \\ 
+  Taxa de trabalho infantil & 0.03137 & 0.01430 & 2.194 & 0.03080 \\ 
+   \hline
+   & AIC = 112.3685 & R²=0.1038 & &
+   \hline
+\end{tabular}
+\label{N_ESP}
+\end{table}
+
+### Regressao Espacial
+
+```{r fig.height = 5, include = FALSE}
+## MODELO CAR
+
+form <- log(tx_analfabetismo) ~ tx_desemprego + tx_trab_infant 
+nc_car <- spautolm(formula = form,
+                   data = base.sp,
+                   listw =  W.list,
+                   family = "CAR")
+
+summary(nc_car)
+AIC(nc_car)
+```
+
+\begin{table}[H]
+\centering
+\caption{Regressão espacial}
+\begin{tabular}{rrrrr}
+  \hline
+ & Estimativa & Erro Padrão & Est. Z & Pr($>$$|$Z$|$) \\ 
+  \hline
+(Intercepto) & 1.7798489 & 0.2204718 & 8.0729 & 6.6e-16 \\ 
+  Taxa de desemprego & 0.0198498 & -0.0705 & -1.902 & 0.94376 \\ 
+  Taxa de trabalho infantil & 0.0123716 & 2.4828 & 2.194 & 0.01304 \\ 
+   \hline
+   & AIC = 112.3685 & R²=0.1038 & &
+   \hline
+\end{tabular}
+\label{ESP}
+\end{table}
+
+### Avaliando os modelos
+
+
+```{r}
+# residuos
+base.sp['r_car'] <- nc_car$fit$residuals
+base.sp['r_ind'] <- model$residuals
+
+colours <- colorNumeric(palette = "Blues", domain = c(-1.5,1.5))
+map3 <- leaflet(data=base.sp) |>
+  addTiles() |>
+  addPolygons(fillColor = ~colours(r_car), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp$r_car, opacity = 1,
+            title="CAR") |>
+  addScaleBar(position="bottomleft")
+map3
+```
+
+
+
+```{r}
+map4 <- leaflet(data=base.sp) |>
+  addTiles() |>
+  addPolygons(fillColor = ~colours(r_ind), color="", weight=1,
+              fillOpacity = 0.8) |>
+  addLegend(pal = colours, values = base.sp$r_ind, opacity = 1,
+            title="IND") |>
+  addScaleBar(position="bottomleft")
+map4
+```
+
+
+### residuos modelo CAR vs modelo independente
+```{r}
+ggplot(base.sp,aes(x = r_car , y = r_ind)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, col=2, lwd=1.1) +
+  labs(x='resíduos CAR',y='resíduos IND', title= "CAR vs IND - resíduos") +
+  theme_bw() + 
+  theme(plot.title=element_text(hjust=0.5))
+```
+
+
