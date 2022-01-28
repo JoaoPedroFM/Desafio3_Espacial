@@ -37,7 +37,6 @@ p_load(char = c("kableExtra",
                 "tmap",
                 "ggplot2")) 
 
-#setwd("C:/Users/igorg/Documents/GitHub/Desafio3_Espacial")
 ```
 
 <div style="text-align: justify">
@@ -46,13 +45,29 @@ p_load(char = c("kableExtra",
 
 O estudo se baseia no conjunto de dados provenientes do CENSO Demográfico de 2010, realizado pelo Instituto Brasileiro de Geografia e Estatística (IBGE), e foram retirados da plataforma TABNET do Departamento de Informática do Sistema Único de Saúde (DATASUS), com enfoque no estado do Rio de Janeiro.
 
-Os pesquisadores Igor Freitas e João Pedro Fernandes vão prestar uma consultoria à Secretaria de Educação do Governo do estado do Rio de Janeiro e estão encarregados de analisar se a taxa de analfabetismo no estado do RJ em 2010 (ano do último CENSO) pode ser modelada por um modelo de dependência espacial com base na taxa de desemprego e de trabalho infantil, sendo que essa variáveis podem ser definidas como: 
+Os pesquisadores Igor Freitas e João Pedro Fernandes vão prestar uma consultoria à Secretaria de Educação do Governo do estado do Rio de Janeiro e estão encarregados de analisar se a taxa de analfabetismo no estado do RJ , em 2010 (ano do último CENSO), pode ser modelada com base na taxa de desemprego e de trabalho infantil, sendo que essas variáveis podem ser definidas como: 
 
 * taxa de analfabetismo: Percentual da população de 15 anos ou mais que não sabe ler e escrever;
 
 * taxa de desemprego: Percentual da população de 16 anos ou mais, economicamente ativa (PEA), desocupada;
 
 * taxa de trabalho infantil: Percentual da população de 10 a 15 anos ocupada.
+
+Os pesquisadores tiveram a ideia de quantificar a influência das covariáveis na taxa de analfabetismo, mas antes, por se tratar de análise estadual, foi proposto verificar possíveis dependências espaciais, e, assim, melhorar as estimativas do modelo.
+
+Para realizar tudo o que desejam, foram definidos os seguintes objetivos:
+
+* Verificar tendências
+
+* Analisar a disposição espacial da taxa de analfabetismo
+
+* Comparar os padrões espaciais da taxa de analfabetismo com as outras taxas em estudo
+
+* Criar um modelo sem dependência espacial
+
+* Construir um modelo com depedência espacial
+
+* Comparar os modelos
 
 
 
@@ -92,7 +107,7 @@ base = analfabetismo |>
 # tx_trab_infant: Percentual da população de 10 a 15 anos ocupada.
 ```
 
-Analisando histogramas, chega-se à conclusão que os valores da taxa de analfabetismo têm comportamento assimétrico à direita, com maior variabilidade, já que há pontos cujos valores muito altos (outliers). Já o log da taxa apresenta comportamento se assemelhando à distribuição normal, diminuindo a variabiidade, corrigindo a assimetria e estabilizando um pouco a incerteza. 
+Analisando histogramas, chega-se a conclusão que os valores da taxa de analfabetismo têm comportamento assimétrico à direita, com maior variabilidade, já que há pontos cujos valores muito altos (outliers). Já o log da taxa apresenta comportamento se assemelhando à distribuição normal, diminuindo a variabiidade, corrigindo a assimetria e estabilizando um pouco a incerteza. 
 Dessa forma, escolhe-se modelar o logaritmo da taxa.
 
 ```{r fig.height = 5, include = TRUE}
@@ -113,7 +128,7 @@ hist(log(base$tx_analfabetismo),main="",xlab="Log da Taxa de Analfabetismo",ylab
 ### Log (taxa de analfabetismo) x taxa de desemprego
 
 Comparando-se as variáveis log (taxa de analfabetismo) e taxa de desemprego,
-não dá para perceber alguma relação tão evidente entre as variáveis mas parece que, principalmente para certos pontos, quanto maior o logaritmo da taxa de analfabetismo, menor a taxa de desemprego.
+não dá para perceber uma relação tão evidente entre as variáveis, mas parece que, principalmente para certos pontos, quanto maior o logaritmo da taxa de analfabetismo, menor a taxa de desemprego.
 
 ```{r results='hide'}
 # juntando as informacoes numa base unica
@@ -141,7 +156,7 @@ ggplot(base.sp,aes(x = tx_desemprego, y = log(tx_analfabetismo))) +
 ### Log (taxa de analfabetismo) x taxa de trabalho infantil
 
 Agora confrontando as variáveis log (taxa de analfabetismo) e taxa de desemprego,
-novamente não é possível notar alguma relação clara entre as variáveis, porém parece que, principalmente para certos pontos, quanto maior o logaritmo da taxa de analfabetismo, maior a taxa de trabalho infantil.
+novamente não é possível notar uma relação clara entre as variáveis, porém parece que, principalmente para certos pontos, quanto maior o logaritmo da taxa de analfabetismo, maior a taxa de trabalho infantil.
 
 ```{r results='hide'}
 # juntando as informacoes numa base unica
@@ -287,6 +302,7 @@ Realizando a regressão do tipo não espacial (Tabela 1), verifica-se que as var
 <br>
 
 Realizando o Teste do Índice de Moran Global, foi confrontada a hipótese de que esse índice era igual a 0 versus a hipótese de que seria diferente desse valor.
+
 Para a avaliação do teste, foi obtido o valor da estatística de teste igual a 0.32 e como o p-valor é pequeno, próximo a zero, rejeita-se H0, indicando que há estrutura de dependência espacial nos resíduos do modelo.
 
 ```{r results='hide'}
@@ -316,7 +332,7 @@ base.sp <- cbind(base.sp,LISA = localMoran[,4])
 
 ```
 
-Observando as Figuras 8 e 9, é possível verificar que o Índice de Moral Local (LISA) possui uma certa concentração de valores em torno do zero, que indicam que a dependência global não é tão alta, mas também apresenta valores maiores em alguns grupos, indicando a presença de clusters e dependência local em certas regiões sobretudo a Metropolitana e Norte Fluminense.
+Observando as Figuras 8 e 9, é possível verificar que o Índice de Moral Local (LISA) possui uma certa concentração de valores em torno do zero, que indicam que a dependência global não é tão alta, mas também apresenta valores maiores em alguns grupos, indicando a presença de clusters e dependência local em certas regiões, sobretudo a Metropolitana e a Norte Fluminense.
  
 ```{r fig.height = 5, include = TRUE}
 
@@ -392,7 +408,7 @@ summary(nc_car)
 
 ### Avaliação dos modelos
 
-Pelas Figuras 10 e 11, nota-se que os resíduos do modelo CAR possuem magnitude menor do que o do modelo independente, já que se ajustou melhor e assim, o Y ajustado está mais próximo do Y verdadeiro.
+Pelas Figuras 10 e 11, nota-se que os resíduos do modelo CAR possuem magnitude menor do que o do modelo independente, já que se ajustou melhor e, assim, o Y ajustado está mais próximo do Y verdadeiro.
 
 Os resíduos parecem estar bem distribuídos: as estruturas de dependência se fazem presentes nas regiões mais escuras, onde há efeitos maiores, nos blocos locais vistos nas outras análises.
 
@@ -453,7 +469,9 @@ ggplot(base.sp,aes(x = r_car , y = r_ind)) +
 
 Neste trabalho, após traçar um objetivo inicial, foram feitas análises exploratórias e geoestatísticas por meio de gráficos, tabelas, mapas e modelos espaciais.
 
-Com isso, foi possibilitado estimar o índice de Moran para avaliar a dependência espacial. Pelas análises gráficas, conseguimos verificar relações entre a taxa de analfabetismo e as variáveis taxa de desemprego e de trabalho infantil. 
+Com isso, foi possibilitado estimar o índice de Moran para avaliar a dependência espacial. Pelas análises gráficas, conseguimos verificar relações entre a taxa de analfabetismo e as variáveis taxa de desemprego e de trabalho infantil.
+
+O modelo CAR, que considera a dependência espacial, foi, de fato, mais adequado aos dados do que um modelo sem dependência espacial.
 
 Por fim, é possível concluir que, utilizando o modelo espacial CAR, a cada incremento de 1% na taxa de trabalho infantil, o logaritmo da taxa de analfabetismo sofre um aumento de 0.031. Isto significa que há um aumento de aproximadamente 1% na taxa de analfabetismo. Como a taxa de desemprego não foi significativa, essa variável não afeta significativamente a taxa de analfabetismo.
 
