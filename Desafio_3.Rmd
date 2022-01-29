@@ -45,29 +45,29 @@ p_load(char = c("kableExtra",
 
 O estudo se baseia no conjunto de dados provenientes do CENSO Demográfico de 2010, realizado pelo Instituto Brasileiro de Geografia e Estatística (IBGE), e foram retirados da plataforma TABNET do Departamento de Informática do Sistema Único de Saúde (DATASUS), com enfoque no estado do Rio de Janeiro.
 
-Os pesquisadores Igor Freitas e João Pedro Fernandes vão prestar uma consultoria à Secretaria de Educação do Governo do estado do Rio de Janeiro e estão encarregados de analisar se a taxa de analfabetismo no estado do RJ , em 2010 (ano do último CENSO), pode ser modelada com base na taxa de desemprego e de trabalho infantil, sendo que essas variáveis podem ser definidas como: 
+Os pesquisadores Igor Freitas e João Pedro Fernandes vão prestar uma consultoria à Secretaria de Educação do Governo do estado do Rio de Janeiro e estão encarregados de analisar se a taxa de analfabetismo no estado do RJ, em 2010 (ano do último CENSO), pode ser modelada com base nas taxas de desemprego e de trabalho infantil, sendo que essas variáveis podem ser definidas como: 
 
-* taxa de analfabetismo: Percentual da população de 15 anos ou mais que não sabe ler e escrever;
+* Taxa de analfabetismo: Percentual da população de 15 anos ou mais que não sabe ler e escrever;
 
-* taxa de desemprego: Percentual da população de 16 anos ou mais, economicamente ativa (PEA), desocupada;
+* Taxa de desemprego: Percentual da população de 16 anos ou mais, economicamente ativa (PEA), desocupada;
 
-* taxa de trabalho infantil: Percentual da população de 10 a 15 anos ocupada.
+* Taxa de trabalho infantil: Percentual da população de 10 a 15 anos ocupada.
 
 Os pesquisadores tiveram a ideia de quantificar a influência das covariáveis na taxa de analfabetismo, mas antes, por se tratar de análise estadual, foi proposto verificar possíveis dependências espaciais, e, assim, melhorar as estimativas do modelo.
 
 Para realizar tudo o que desejam, foram definidos os seguintes objetivos:
 
-* Verificar tendências
+* Verificar tendências;
 
-* Analisar a disposição espacial da taxa de analfabetismo
+* Analisar a disposição espacial da taxa de analfabetismo;
 
-* Comparar os padrões espaciais da taxa de analfabetismo com as outras taxas em estudo
+* Comparar os padrões espaciais da taxa de analfabetismo com as outras taxas em estudo;
 
-* Criar um modelo sem dependência espacial
+* Criar um modelo sem dependência espacial;
 
-* Construir um modelo com depedência espacial
+* Construir um modelo com dependência espacial;
 
-* Comparar os modelos
+* Comparar os modelos.
 
 
 
@@ -337,7 +337,7 @@ Observando as Figuras 8 e 9, é possível verificar que o Índice de Moral Local
 ```{r fig.height = 5, include = TRUE}
 
 ggplot(base.sp)+
-  geom_histogram(aes(x = LISA))
+  geom_histogram(aes(x = LISA)) + labs(y= "Frequência")
 # as áreas em torno do 0 indicam não dependência
 # as áreas com LISA maior ou menor indicam dependência
 ```
